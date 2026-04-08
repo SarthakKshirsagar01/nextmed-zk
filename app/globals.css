@@ -1,0 +1,128 @@
+:root {
+  --bg: #f7f3eb;
+  --ink: #18212b;
+  --muted: #5f6c7a;
+  --card: #fffaf2;
+  --line: #d8cfc0;
+  --accent: #0964a6;
+  --accent2: #0f8a6c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 15% 0%, #ffe4b9 0, transparent 34%),
+    radial-gradient(circle at 84% 18%, #c9f4ed 0, transparent 28%),
+    linear-gradient(130deg, #f7f3eb 0%, #eef4f0 56%, #eceef8 100%);
+  font-family: "Segoe UI", sans-serif;
+}
+
+.topbar {
+  max-width: 1100px;
+  margin: 1rem auto 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.navlinks {
+  max-width: 1100px;
+  margin: 0.7rem auto;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.navlinks a {
+  text-decoration: none;
+  color: var(--ink);
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto 2rem;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.grid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.grid article {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: white;
+}
+
+.primary,
+.secondary,
+.wallet {
+  margin-top: 0.8rem;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary,
+.wallet {
+  color: white;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+}
+
+.wallet:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wallet-error {
+  margin: 0.35rem 0 0;
+  color: #8f2d1b;
+  font-size: 0.82rem;
+}
+
+.secondary {
+  color: var(--ink);
+  background: #edf3ff;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ok {
+  color: #0c7a4b;
+  font-weight: 700;
+}
+
+.timeline ul {
+  color: var(--muted);
+}

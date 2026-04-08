@@ -1,0 +1,57 @@
+# NextMed Local Development Stack
+# Run: docker-compose up
+# This includes PostgreSQL ledger + mock Midnight proof server
+
+services:
+  ledger:
+    image: postgres:16-alpine
+    container_name: nextmed-ledger
+    environment:
+      POSTGRES_DB: midnight_ledger
+      POSTGRES_USER: prover
+      POSTGRES_PASSWORD: prover_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./services/ledger/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ledger-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prover"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nextmed-network
+
+  proof-server:
+    build:
+      context: ./services/proof-server
+      dockerfile: Dockerfile
+    container_name: nextmed-proof-server
+    environment:
+      PORT: 9090
+      DB_HOST: ledger
+      DB_PORT: 5432
+      DB_NAME: midnight_ledger
+      DB_USER: prover
+      DB_PASSWORD: prover_secret
+    ports:
+      - "9090:9090"
+    depends_on:
+      ledger:
+        condition: service_healthy
+    networks:
+      - nextmed-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ledger-data:
+    driver: local
+
+networks:
+  nextmed-network:
+    driver: bridge
