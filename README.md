@@ -93,14 +93,110 @@ Test service health:
 curl http://localhost:9090/health
 ```
 
+## Proof Provider Configuration
+
+The frontend now supports two runtime modes using environment variables:
+
+- mock-http: calls local mock proof server endpoints
+- midnight-http: calls a Midnight bridge/prover API with the same app flow
+
+Create a local env file from `.env.example` and set values as needed.
+
+Default local mode:
+
+```bash
+NEXT_PUBLIC_PROOF_PROVIDER=mock-http
+NEXT_PUBLIC_PROOF_API_URL=http://localhost:9090
+```
+
+Midnight bridge mode:
+
+```bash
+NEXT_PUBLIC_PROOF_PROVIDER=midnight-http
+NEXT_PUBLIC_MIDNIGHT_API_URL=https://your-midnight-bridge.example
+NEXT_PUBLIC_MIDNIGHT_PROVE_PATH=/prove
+NEXT_PUBLIC_MIDNIGHT_VERIFY_PATH=/verify
+```
+
+The issue, passport, and verify pages do not require code changes when switching modes.
+
+## Hackathon Readiness (April 8)
+
+Verification snapshot (April 8):
+
+- [x] Frontend production build passes (`npm run build`)
+- [x] Proof server typecheck passes (`cd services/proof-server && npm run typecheck`)
+- [ ] Contract compile gate passes (`npm run compile:contract`) - blocked: `midnight-compile` not found in PATH
+
+Completed:
+
+- [x] End-to-end UI flow wired: issue -> proof generation -> verification
+- [x] Frontend no longer uses fake timers for proof/verify actions
+- [x] Dockerized local stack for proof server + ledger
+- [x] Runtime provider toggle for mock and Midnight bridge modes
+- [x] Frontend production build passing
+
+Critical pending:
+
+- [ ] Replace mock proof logic with actual Midnight SDK or Midnight bridge implementation
+- [ ] Compile and commit real managed artifacts from Compact contract
+- [ ] Validate full flow with real Lace wallet on Midnight preprod
+- [ ] Confirm on-chain nullifier enforcement in production contract path
+- [ ] Record demo video and attach link
+
 ## Submission Checklist (April 10)
 
-- [ ] Add Apache-2.0 license in repository root.
+- [x] Add Apache-2.0 license in repository root.
 - [ ] Include compiled contract artifacts in managed folder.
-- [ ] Add docker-compose.yml for local proof service wiring.
+- [x] Add docker-compose.yml for local proof service wiring.
 - [ ] Validate Lace wallet flow on preprod.
 - [ ] Add 2-minute demo link in this README.
-- [ ] Explicitly document Rational Privacy and Witness Context usage.
+- [x] Explicitly document Rational Privacy and Witness Context usage.
+
+## Rational Privacy and Witness Context
+
+- Rational Privacy: Verifiers receive only an eligibility claim (`Eligible = true/false`) without patient identity, clinic identity, or vaccination event date.
+- Witness Context: The attestation data is transformed into witness material used for proof generation, and private data remains client-side while only proof artifacts are submitted to verification endpoints.
+
+## Fast Runbook for Final Pending Tasks
+
+1. Install Midnight toolchain and verify compiler in PATH.
+
+```bash
+midnight-compile --version
+```
+
+2. Generate real managed artifacts and confirm placeholders are replaced.
+
+```bash
+npm run compile:contract
+```
+
+3. Start local stack and frontend.
+
+```bash
+docker-compose up --build
+npm run dev
+```
+
+4. Validate preprod mode with real bridge and wallet.
+
+```bash
+# .env.local
+NEXT_PUBLIC_PROOF_PROVIDER=midnight-http
+NEXT_PUBLIC_MIDNIGHT_API_URL=https://your-midnight-bridge.example
+NEXT_PUBLIC_MIDNIGHT_PROVE_PATH=/prove
+NEXT_PUBLIC_MIDNIGHT_VERIFY_PATH=/verify
+```
+
+5. Execute replay/nullifier test.
+
+- Generate one proof in `/passport` and verify once in `/verify` (should pass).
+- Verify the same proof a second time (should fail due to nullifier replay prevention).
+
+6. Add final demo link.
+
+- Paste your 2-minute demo URL under the submission checklist before submission.
 
 ## 2-Minute Demo Script
 

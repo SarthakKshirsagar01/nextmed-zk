@@ -63,6 +63,24 @@ body {
   padding: 1rem;
 }
 
+.panel label {
+  display: block;
+  margin-top: 0.8rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.panel input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.95rem;
+  background: #fff;
+  color: var(--ink);
+}
+
 .grid {
   margin-top: 1rem;
   display: grid;
@@ -110,6 +128,12 @@ body {
   background: #edf3ff;
 }
 
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .eyebrow {
   margin: 0;
   font-size: 0.74rem;
@@ -121,6 +145,11 @@ body {
 .ok {
   color: #0c7a4b;
   font-weight: 700;
+}
+
+.error {
+  color: #8f2d1b;
+  font-weight: 600;
 }
 
 .timeline ul {

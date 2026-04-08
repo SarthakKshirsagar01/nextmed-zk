@@ -30,6 +30,7 @@ services:
     container_name: nextmed-proof-server
     environment:
       PORT: 9090
+      PROOF_BACKEND_MODE: mock
       DB_HOST: ledger
       DB_PORT: 5432
       DB_NAME: midnight_ledger

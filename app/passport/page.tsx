@@ -1,34 +1,72 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  getProofRuntimeConfig,
+  getStoredAttestation,
+  requestProof,
+  setStoredProof,
+  type ProofArtifact,
+} from "../../lib/zk/proof";
 
 export default function PassportPage() {
   const router = useRouter();
+  const runtime = getProofRuntimeConfig();
   const [generating, setGenerating] = useState(false);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<ProofArtifact | null>(null);
+  const [hasAttestation, setHasAttestation] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const generateProof = () => {
+  useEffect(() => {
+    setHasAttestation(Boolean(getStoredAttestation()));
+  }, []);
+
+  const generateProof = async () => {
     setGenerating(true);
-    setDone(false);
-    window.setTimeout(() => {
+    setError(null);
+    setDone(null);
+
+    try {
+      const attestation = getStoredAttestation();
+      if (!attestation) {
+        setError("No attestation found. Go to /issue first.");
+        return;
+      }
+
+      const proof = await requestProof(attestation);
+      setStoredProof(proof);
+      setDone(proof);
+    } catch {
+      setError(
+        `Proof generation failed (${runtime.mode}) at ${runtime.apiBaseUrl}.`,
+      );
+    } finally {
       setGenerating(false);
-      setDone(true);
-    }, 1800);
+    }
   };
 
   return (
     <section className="panel">
       <h2>Patient Vault</h2>
       <p>Data stays local. Proofs go to Midnight.</p>
-      <button className="primary" onClick={generateProof} type="button">
+      {!hasAttestation && (
+        <p className="error">Issue an attestation first in /issue.</p>
+      )}
+      <button
+        className="primary"
+        onClick={generateProof}
+        type="button"
+        disabled={generating || !hasAttestation}
+      >
         {generating ? "Generating Proof..." : "Generate Eligibility Proof"}
       </button>
       {done && (
         <p className="ok">
-          Proof ready. You can now present it for verification.
+          Proof ready with nullifier {done.nullifier.slice(0, 18)}...
         </p>
       )}
+      {error && <p className="error">{error}</p>}
       <button
         className="secondary"
         onClick={() => router.push("/verify")}

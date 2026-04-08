@@ -127,6 +127,27 @@ Response:
 }
 ```
 
+## Midnight Bridge Mode
+
+By default, docker-compose runs proof server in mock mode. To switch to a Midnight bridge backend, set these environment values for the `proof-server` service:
+
+```yaml
+environment:
+  PROOF_BACKEND_MODE: midnight-http
+  MIDNIGHT_BRIDGE_URL: https://your-midnight-bridge.example
+  MIDNIGHT_BRIDGE_PROVE_PATH: /prove
+  MIDNIGHT_BRIDGE_VERIFY_PATH: /verify
+  MIDNIGHT_BRIDGE_API_KEY: your_api_key
+  MIDNIGHT_BRIDGE_API_KEY_HEADER: Authorization
+  MIDNIGHT_BRIDGE_API_KEY_PREFIX: Bearer
+  MIDNIGHT_BRIDGE_REQUEST_WRAPPER: raw
+  MIDNIGHT_BRIDGE_TIMEOUT_MS: 15000
+```
+
+If your bridge expects nested payloads, set `MIDNIGHT_BRIDGE_REQUEST_WRAPPER` to `data`, `input`, or `payload`.
+
+The server also normalizes common bridge response wrappers (`data`, `result`) and field aliases.
+
 ## Troubleshooting
 
 ### Port already in use
