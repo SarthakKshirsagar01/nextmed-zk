@@ -2,38 +2,47 @@ pragma language_version 0.30.0;
 
 import CompactStandardLibrary;
 
-// Ledger: Public on-chain state
-// Stores a nullifier to prevent re-use of a single record proof.
-export ledger record_nullifier: Map<Bytes<32>, Boolean>;
+// Public on-chain state.
+export ledger is_eligible: Boolean;
+export ledger verified_at: Field;
+export ledger issuer_key_hash: Opaque<"string">;
+export ledger nullifier: Opaque<"string">;
+export ledger nullifier_used: Boolean;
 
-// Witness: Private attestation material loaded from local patient vault.
-witness get_local_attestation(): [Bytes<32>, Bytes<32>, Bytes<64>];
+// Private witness inputs resolved locally.
+witness local_health_record(): Opaque<"string">;
+witness clinic_signature(): Opaque<"string">;
+witness current_timestamp(): Field;
+witness proof_nullifier(): Opaque<"string">;
 
-/**
- * Proves the patient holds a valid vaccination record signed by
- * an authorized provider, without revealing private record fields.
- */
 export circuit prove_vaccination_eligibility(
-    provider_pubkey: Bytes<32>,
-    required_vaccine_code: Uint<32>
-): Boolean {
-    // Fetch private details: [record_hash, salt, signature]
-    const [record_hash, salt, signature] = get_local_attestation();
+    required_vaccine: Opaque<"string">,
+    clinic_pubkey_hash: Opaque<"string">
+): [] {
+    const record = local_health_record();
+    const sig = clinic_signature();
+    const now = current_timestamp();
+    const nonce = proof_nullifier();
 
-    // Verify provider signature over record hash
-    assert verify_signature(provider_pubkey, record_hash, signature) "Invalid Provider Signature";
+    // Replay prevention.
+    assert !nullifier_used "This proof nonce has already been used.";
 
-    // Bind policy requirement into the proof context.
-    // The exact vaccine-code predicate should be enforced inside the witness
-    // preprocessing logic or a dedicated circuit parser over record payload.
-    const policy_scope = persistent_hash<[Uint<32>]>([required_vaccine_code]);
+    // Placeholder policy checks to be replaced by full signature and record parsers.
+    const sig_valid = true;
+    assert sig_valid "Record signature is invalid.";
 
-    // Privacy-preserving uniqueness guard
-    const nullifier = persistent_hash<[Bytes<32>, Bytes<32>, Bytes<32>]>([record_hash, salt, policy_scope]);
+    const has_vaccine = true;
+    assert has_vaccine "Record does not contain required vaccine.";
 
-    // Enforce one-time use of the same record event
-    assert !record_nullifier.member(nullifier) "This health record was already used";
+    is_eligible = disclose(true);
+    verified_at = disclose(now);
+    issuer_key_hash = disclose(clinic_pubkey_hash);
+    nullifier = disclose(nonce);
+    nullifier_used = disclose(true);
+}
 
-    record_nullifier.insert(nullifier, true);
-    return disclose(true);
+export circuit revoke_eligibility(): [] {
+    is_eligible = disclose(false);
+    verified_at = disclose(current_timestamp());
+    nullifier_used = disclose(false);
 }

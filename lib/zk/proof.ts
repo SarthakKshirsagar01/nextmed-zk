@@ -22,61 +22,8 @@ export type VerifyResult = {
   reason?: string;
 };
 
-export type ProofProviderMode = "mock-http" | "midnight-http";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_PROOF_API_URL || "http://localhost:9090";
-const MIDNIGHT_API_BASE_URL =
-  process.env.NEXT_PUBLIC_MIDNIGHT_API_URL || API_BASE_URL;
-const PROOF_PROVIDER_MODE =
-  (process.env.NEXT_PUBLIC_PROOF_PROVIDER as ProofProviderMode | undefined) ||
-  "mock-http";
-const MOCK_PROVE_PATH = process.env.NEXT_PUBLIC_PROOF_PROVE_PATH || "/prove";
-const MOCK_VERIFY_PATH = process.env.NEXT_PUBLIC_PROOF_VERIFY_PATH || "/verify";
-const MIDNIGHT_PROVE_PATH =
-  process.env.NEXT_PUBLIC_MIDNIGHT_PROVE_PATH || "/prove";
-const MIDNIGHT_VERIFY_PATH =
-  process.env.NEXT_PUBLIC_MIDNIGHT_VERIFY_PATH || "/verify";
 const ATTESTATION_KEY = "nextmed.attestation";
 const PROOF_KEY = "nextmed.proof";
-
-function joinUrl(baseUrl: string, path: string): string {
-  return `${baseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
-}
-
-function getProofEndpoints(): {
-  mode: ProofProviderMode;
-  proveUrl: string;
-  verifyUrl: string;
-} {
-  if (PROOF_PROVIDER_MODE === "midnight-http") {
-    return {
-      mode: PROOF_PROVIDER_MODE,
-      proveUrl: joinUrl(MIDNIGHT_API_BASE_URL, MIDNIGHT_PROVE_PATH),
-      verifyUrl: joinUrl(MIDNIGHT_API_BASE_URL, MIDNIGHT_VERIFY_PATH),
-    };
-  }
-
-  return {
-    mode: "mock-http",
-    proveUrl: joinUrl(API_BASE_URL, MOCK_PROVE_PATH),
-    verifyUrl: joinUrl(API_BASE_URL, MOCK_VERIFY_PATH),
-  };
-}
-
-export function getProofRuntimeConfig(): {
-  mode: ProofProviderMode;
-  apiBaseUrl: string;
-} {
-  const endpoints = getProofEndpoints();
-  const apiBaseUrl =
-    endpoints.mode === "midnight-http" ? MIDNIGHT_API_BASE_URL : API_BASE_URL;
-
-  return {
-    mode: endpoints.mode,
-    apiBaseUrl,
-  };
-}
 
 async function sha256Hex(input: string): Promise<string> {
   const payload = new TextEncoder().encode(input);
@@ -165,55 +112,4 @@ export async function createAttestation(
     witnessHash,
     issuedAt: new Date().toISOString(),
   };
-}
-
-export async function requestProof(
-  attestation: StoredAttestation,
-): Promise<ProofArtifact> {
-  const { mode, proveUrl } = getProofEndpoints();
-
-  const response = await fetch(proveUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      witnessHash: attestation.witnessHash,
-      providerPubkey: attestation.providerPubkey,
-      vaccineCodes: attestation.vaccineCodes,
-    }),
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Proof generation failed (${mode})`);
-  }
-
-  const payload = (await response.json()) as ProofArtifact;
-  return payload;
-}
-
-export async function verifyProof(
-  artifact: ProofArtifact,
-): Promise<VerifyResult> {
-  const { mode, verifyUrl } = getProofEndpoints();
-
-  const response = await fetch(verifyUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      proof: artifact.proof,
-      nullifier: artifact.nullifier,
-      commitmentHash: artifact.commitmentHash,
-    }),
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Verification failed (${mode})`);
-  }
-
-  return (await response.json()) as VerifyResult;
 }

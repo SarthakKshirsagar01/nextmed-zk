@@ -1,92 +1,119 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { connectLace, detectLace } from "../lib/wallet/lace";
+// ============================================================
+// components/WalletConnect.tsx
+//
+// Connects to the Midnight Lace wallet.
+// Uses connectWallet() from midnightClient.ts — real Lace API.
+// ============================================================
 
-export default function WalletConnect() {
-  const [installed, setInstalled] = useState(false);
-  const [connected, setConnected] = useState(false);
-  const [busy, setBusy] = useState(false);
+import { useState } from "react";
+import { connectWallet, type WalletState } from "../lib/midnight-client";
+
+interface WalletConnectProps {
+  onConnected?: (wallet: WalletState) => void;
+}
+
+export default function WalletConnect({ onConnected }: WalletConnectProps) {
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detecting, setDetecting] = useState(true);
+  const [wallet, setWallet] = useState<WalletState | null>(null);
 
-  const runDetection = async () => {
-    setDetecting(true);
+  const short = (addr: string) =>
+    addr.length > 16 ? `${addr.slice(0, 8)}…${addr.slice(-6)}` : addr;
+
+  async function handleConnect() {
+    setLoading(true);
     setError(null);
     try {
-      const found = await detectLace();
-      setInstalled(found);
-      if (!found) {
-        setError(
-          "Lace provider not detected. Open/unlock Lace and click Retry.",
-        );
-      }
-    } catch {
-      setInstalled(false);
-      setError("Unable to detect Lace provider.");
+      const state = await connectWallet();
+      setWallet(state);
+      onConnected?.(state);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Connection failed");
     } finally {
-      setDetecting(false);
+      setLoading(false);
     }
-  };
+  }
 
-  useEffect(() => {
-    runDetection();
-  }, []);
-
-  const onConnect = async () => {
-    setError(null);
-
-    if (!installed) {
-      setError("Lace provider not detected in this browser.");
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const ok = await connectLace();
-      setConnected(ok);
-      if (!ok) {
-        setError("Unable to connect to Lace wallet.");
-      }
-    } catch (err) {
-      setConnected(false);
-      if (err instanceof Error && err.message === "LACE_TIMEOUT") {
-        setError(
-          "❌ Lace popup timed out. Make sure you CLICKED APPROVE in the Lace extension popup, then try again.",
-        );
-      } else if (err instanceof Error && err.message) {
-        setError(`Wallet error: ${err.message}`);
-      } else {
-        setError("Wallet connection was rejected or failed.");
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
+  if (wallet) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 16px",
+          borderRadius: 8,
+          border: "0.5px solid #1D9E75",
+          background: "rgba(29,158,117,0.06)",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 500 }}>
+            Lace wallet connected
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              fontFamily: "monospace",
+              opacity: 0.6,
+              marginTop: 2,
+            }}
+          >
+            {short(wallet.shieldedAddress)} · {wallet.networkId}
+          </div>
+        </div>
+        <div
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: "#1D9E75",
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
       <button
-        className="wallet"
-        onClick={onConnect}
-        type="button"
-        disabled={busy || detecting}
+        onClick={handleConnect}
+        disabled={loading}
+        style={{
+          width: "100%",
+          padding: "12px 16px",
+          borderRadius: 8,
+          border: "0.5px solid var(--color-border-secondary, #ccc)",
+          background: "transparent",
+          cursor: loading ? "wait" : "pointer",
+          fontSize: 14,
+          fontWeight: 500,
+          opacity: loading ? 0.6 : 1,
+          transition: "opacity .15s",
+        }}
       >
-        {busy
-          ? "Connecting..."
-          : detecting
-            ? "Detecting Lace..."
-            : connected
-              ? "✓ Lace Connected"
-              : installed
-                ? "Connect Lace Wallet"
-                : "📦 Install Lace Wallet"}
+        {loading ? "Connecting to Lace..." : "Connect Lace Wallet"}
       </button>
-      {error && <p className="wallet-error">{error}</p>}
-      {!installed && !detecting && (
-        <button className="secondary" onClick={runDetection} type="button">
-          Retry Detect
-        </button>
+
+      {error && (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "10px 14px",
+            borderRadius: 6,
+            background: "rgba(162,45,45,0.08)",
+            border: "0.5px solid rgba(162,45,45,0.3)",
+            fontSize: 12,
+            fontFamily: "monospace",
+            whiteSpace: "pre-wrap",
+            lineHeight: 1.5,
+            color: "#A32D2D",
+          }}
+        >
+          {error}
+        </div>
       )}
     </div>
   );

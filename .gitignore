@@ -24,3 +24,7 @@ out
 *.njsproj
 *.sln
 *.sw?
+managed/*.pk
+managed/*.vk
+managed/*.zkir
+.env.local

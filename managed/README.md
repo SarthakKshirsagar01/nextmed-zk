@@ -1,44 +1,23 @@
-# Midnight Managed Artifacts
+# Midnight Compile Output
 
-This folder contains compiled contract artifacts for the NextMed proof system.
-
-## Files
-
-- **contracts/patient_registry.managed.json** – Compiled contract state machine (managed code)
-- **contracts/patient_registry.abi.json** – Application Binary Interface / circuit ABI
-- **contracts/patient_registry.bytecode** – Compiled bytecode for Midnight VM execution
+This folder stores generated contract artifacts and key material emitted by compactc.
 
 ## Generation
 
-Run the compile script from the workspace root to generate/update artifacts:
+From workspace root:
 
-```bash
-# Option 1: Using npm script
-npm run compile:contract
+- npm run compile:contract
 
-# Option 2: Direct bash
-bash compile.sh
-```
+Or directly:
 
-**Requirements:**
+- bash compile.sh
 
-- Midnight toolchain installed ([docs.midnight.network/getting-started/installation](https://docs.midnight.network/getting-started/installation))
-- `midnight-compile` command in PATH
+## Requirements
 
-## Usage
+- Midnight toolchain installed
+- compactc available in PATH
 
-Import the `.managed.json` into the Midnight SDK for proof generation and verification:
+## Notes
 
-```typescript
-import managedContract from './contracts/patient_registry.managed.json';
-
-const contract = new MidnightContract(managedContract);
-await contract.prove({...});
-```
-
-## Submission Checklist
-
-- [ ] Artifacts generated with `npm run compile:contract`
-- [ ] All three files present in `managed/contracts/`
-- [ ] Contract logic matches `pkgs/contract/src/patient_registry.compact`
-- [ ] Ready for Midnight Devnet deployment
+- docker-compose mounts this folder into the proof-server container at /keys (read-only)
+- proving and verification key files are ignored by git via .gitignore

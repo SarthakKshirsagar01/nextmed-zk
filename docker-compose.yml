@@ -1,58 +1,18 @@
-# NextMed Local Development Stack
-# Run: docker-compose up
-# This includes PostgreSQL ledger + mock Midnight proof server
-
 services:
-  ledger:
-    image: postgres:16-alpine
-    container_name: nextmed-ledger
-    environment:
-      POSTGRES_DB: midnight_ledger
-      POSTGRES_USER: prover
-      POSTGRES_PASSWORD: prover_secret
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./services/ledger/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ledger-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U prover"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - nextmed-network
-
-  proof-server:
-    build:
-      context: ./services/proof-server
-      dockerfile: Dockerfile
+  midnight-proof-server:
+    image: midnightntwrk/proof-server:8.0.3
     container_name: nextmed-proof-server
-    environment:
-      PORT: 9090
-      PROOF_BACKEND_MODE: mock
-      DB_HOST: ledger
-      DB_PORT: 5432
-      DB_NAME: midnight_ledger
-      DB_USER: prover
-      DB_PASSWORD: prover_secret
     ports:
-      - "9090:9090"
-    depends_on:
-      ledger:
-        condition: service_healthy
-    networks:
-      - nextmed-network
+      - "6300:6300"
+    environment:
+      - RUST_LOG=info
+      - PROOF_SERVER_KEYS_DIR=/keys
+    volumes:
+      - ./managed:/keys:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:6300/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-volumes:
-  ledger-data:
-    driver: local
-
-networks:
-  nextmed-network:
-    driver: bridge
+      start_period: 20s
+    restart: unless-stopped

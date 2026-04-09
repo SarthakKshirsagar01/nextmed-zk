@@ -1,78 +1,79 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  getProofRuntimeConfig,
-  getStoredProof,
-  verifyProof,
-  type VerifyResult,
-} from "../../lib/zk/proof";
+import { useState } from "react";
+import { getLedgerState, type LedgerState } from "../../lib/midnight-client";
 
 export default function VerifyPage() {
-  const runtime = getProofRuntimeConfig();
-  const [checking, setChecking] = useState(false);
-  const [verified, setVerified] = useState<VerifyResult | null>(null);
-  const [hasProof, setHasProof] = useState(false);
+  const [address, setAddress] = useState(
+    process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "",
+  );
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<LedgerState | null | "not-found">(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setHasProof(Boolean(getStoredProof()));
-  }, []);
+  async function handleVerify() {
+    if (!address.trim()) {
+      setError("Enter a contract address.");
+      return;
+    }
 
-  const runVerify = async () => {
-    setChecking(true);
-    setVerified(null);
+    setLoading(true);
     setError(null);
+    setResult(null);
 
     try {
-      const proof = getStoredProof();
-      if (!proof) {
-        setError("No proof found. Generate one in /passport first.");
-        return;
-      }
-
-      const result = await verifyProof(proof);
-      setVerified(result);
-    } catch {
-      setError(
-        `Verification failed (${runtime.mode}) at ${runtime.apiBaseUrl}.`,
-      );
+      const state = await getLedgerState(address.trim());
+      setResult(state ?? "not-found");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Lookup failed.");
     } finally {
-      setChecking(false);
+      setLoading(false);
     }
-  };
+  }
 
   return (
     <section className="panel">
       <h2>Verifier Scanner</h2>
-      <p>Verifier learns only one fact: eligibility true or false.</p>
-      {!hasProof && <p className="error">Generate proof first in /passport.</p>}
+      <p>Read only the public ledger result for this proof contract.</p>
+
+      <label htmlFor="contract-address">Contract address</label>
+      <input
+        id="contract-address"
+        value={address}
+        onChange={(event) => setAddress(event.target.value)}
+        placeholder="0x... or Midnight contract address"
+      />
+
       <button
         className="primary"
-        onClick={runVerify}
+        onClick={handleVerify}
+        disabled={loading}
         type="button"
-        disabled={checking || !hasProof}
       >
-        {checking ? "Verifying..." : "Verify Eligibility"}
+        {loading ? "Querying ledger..." : "Check Eligibility"}
       </button>
-      {verified?.valid && (
+
+      {error && <p className="error">{error}</p>}
+
+      {result === "not-found" && (
+        <p className="error" style={{ fontWeight: 500 }}>
+          No record found for this address yet.
+        </p>
+      )}
+
+      {result && result !== "not-found" && (
         <div className="timeline">
-          <p className="ok">
-            Eligible = {String(verified.isEligible ?? false)}
-          </p>
+          <p className="ok">Eligible = {String(result.is_eligible)}</p>
           <ul>
-            <li>Provider signature verified in proof</li>
-            <li>Nullifier uniqueness checked on-chain</li>
-            <li>No patient identity disclosed</li>
+            <li>
+              verified_at:{" "}
+              {new Date(result.verified_at * 1000).toLocaleString()}
+            </li>
+            <li>issuer_key_hash: {result.issuer_key_hash}</li>
+            <li>nullifier: {result.nullifier}</li>
           </ul>
         </div>
       )}
-      {verified && !verified.valid && (
-        <p className="error">
-          Verification rejected: {verified.reason || "Unknown reason"}
-        </p>
-      )}
-      {error && <p className="error">{error}</p>}
     </section>
   );
 }

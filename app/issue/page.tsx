@@ -1,37 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import { clearStoredProof } from "../../lib/zk/proof";
 import {
-  clearStoredProof,
-  createAttestation,
-  setStoredAttestation,
-} from "../../lib/zk/proof";
+  createDemoRecord,
+  storeRecord,
+  type SignedHealthRecord,
+} from "../../lib/witnessProvider";
+
+const VACCINES = ["COVID-19", "MMR", "Hepatitis B", "Polio"];
 
 export default function IssuePage() {
-  const [patientRef, setPatientRef] = useState("demo-patient-001");
-  const [providerPubkey, setProviderPubkey] = useState("did:midnight:clinic-a");
-  const [vaccineCodes, setVaccineCodes] = useState("MMR,COVID19");
-  const [issued, setIssued] = useState(false);
+  const [selectedVaccine, setSelectedVaccine] = useState("COVID-19");
+  const [issued, setIssued] = useState<SignedHealthRecord | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onIssue = async () => {
     setIssuing(true);
-    setIssued(false);
     setError(null);
+    setIssued(null);
 
     try {
-      const attestation = await createAttestation({
-        patientRef,
-        providerPubkey,
-        vaccineCodes: vaccineCodes.split(","),
-      });
-
-      setStoredAttestation(attestation);
+      const record = createDemoRecord(selectedVaccine);
+      storeRecord(record);
       clearStoredProof();
-      setIssued(true);
+      setIssued(record);
     } catch {
-      setError("Unable to issue attestation. Please try again.");
+      setError("Unable to issue credential. Please try again.");
     } finally {
       setIssuing(false);
     }
@@ -41,29 +37,31 @@ export default function IssuePage() {
     <section className="panel">
       <h2>Issuer Dashboard</h2>
       <p>
-        Doctor signs a vaccination record and sends it directly to the patient
-        wallet.
+        Simulate clinic issuance by writing a signed health credential to local
+        device storage.
       </p>
-      <label htmlFor="patient-ref">Patient Reference</label>
-      <input
-        id="patient-ref"
-        value={patientRef}
-        onChange={(event) => setPatientRef(event.target.value)}
-      />
 
-      <label htmlFor="provider-pubkey">Provider Public Key</label>
-      <input
-        id="provider-pubkey"
-        value={providerPubkey}
-        onChange={(event) => setProviderPubkey(event.target.value)}
-      />
-
-      <label htmlFor="vaccine-codes">Vaccine Codes (comma-separated)</label>
-      <input
-        id="vaccine-codes"
-        value={vaccineCodes}
-        onChange={(event) => setVaccineCodes(event.target.value)}
-      />
+      <label htmlFor="vaccine">Vaccine</label>
+      <select
+        id="vaccine"
+        value={selectedVaccine}
+        onChange={(event) => setSelectedVaccine(event.target.value)}
+        style={{
+          width: "100%",
+          border: "1px solid var(--line)",
+          borderRadius: "10px",
+          padding: "0.6rem 0.7rem",
+          fontSize: "0.95rem",
+          background: "#fff",
+          color: "var(--ink)",
+        }}
+      >
+        {VACCINES.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
 
       <button
         className="primary"
@@ -71,13 +69,20 @@ export default function IssuePage() {
         type="button"
         disabled={issuing}
       >
-        {issuing ? "Issuing..." : "Issue Signed Attestation"}
+        {issuing ? "Issuing..." : "Issue Credential to Patient Device"}
       </button>
+
       {issued && (
-        <p className="ok">
-          Attestation issued locally and ready for proof generation.
-        </p>
+        <div className="timeline">
+          <p className="ok">Credential issued locally.</p>
+          <ul>
+            <li>Patient ID: {issued.record.patient_id}</li>
+            <li>Vaccine: {issued.record.vaccinations[0]?.vaccine_name}</li>
+            <li>Clinic hash: {issued.clinic_pubkey_hash}</li>
+          </ul>
+        </div>
       )}
+
       {error && <p className="error">{error}</p>}
     </section>
   );
