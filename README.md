@@ -1,162 +1,199 @@
 # NextMed ZK Health
 
-NextMed is a Midnight-based demo app that proves a simple claim:
+NextMed is a Midnight project that demonstrates private vaccination verification.
 
-"This patient has a valid vaccination record signed by an approved clinic."
+Goal in one sentence:
+show that a patient is eligible without exposing private medical data.
 
-The verifier only sees a yes or no result. Personal health details stay private.
+The app has three user-facing steps:
 
-## What this project includes
+- Issue a credential
+- Generate a proof
+- Verify the public result
 
-- A Next.js app with four routes:
-  - `/` overview
-  - `/issue` issue a local demo credential
-  - `/passport` generate proof flow
-  - `/verify` read public verification result
-- A Compact smart contract in `pkgs/contract/src/patient_registry.compact`
-- Browser-side witness provider in `lib/witnessProvider.ts`
-- Midnight wallet integration in `lib/midnight-client.ts`
-- Official Midnight proof server setup with Docker
+## Why this project exists
 
-## How the user flow works
+In many real-world workflows, a verifier only needs a yes/no answer, not full records.
+NextMed focuses on that exact model:
 
-1. On `/issue`, the app creates a signed-looking demo health record and stores it in localStorage.
-2. On `/passport`, the app reads that local record as witness input and starts proof generation.
-3. On `/verify`, a verifier checks the public ledger-facing result.
-
-In plain terms: issue privately, prove privately, verify publicly.
-
-## Tech stack
-
-- Next.js 16 + React 19 + TypeScript
-- Midnight packages:
-  - `@midnight-ntwrk/dapp-connector-api`
-  - `@midnight-ntwrk/midnight-js-contracts`
-  - `@midnight-ntwrk/midnight-js-types`
-  - `@midnight-ntwrk/midnight-js-utils`
-- Compact language contract
-- Dockerized Midnight proof server
+- the patient keeps the detailed record private
+- the verifier reads only the public on-chain output
 
 ## Project structure
 
-- `app/` Next.js routes and UI
-- `components/WalletConnect.tsx` shared wallet connection UI
-- `lib/midnight-client.ts` Midnight wallet/proof client wiring
-- `lib/midnightClient.ts` export alias for compatibility
-- `lib/walletContext.tsx` global wallet state across routes
-- `lib/witnessProvider.ts` browser witness functions and local record helpers
-- `managed/contracts/` compiled contract artifacts (currently placeholders until compile)
-- `pkgs/contract/src/patient_registry.compact` contract source
-- `docker-compose.yml` Midnight proof server service
+Top-level overview:
 
-## Quick start
+- app/
+  - page.tsx (home)
+  - issue/page.tsx (clinic-side issuance demo)
+  - passport/page.tsx (patient proof flow)
+  - verify/page.tsx (verifier lookup)
+  - layout.tsx (global layout and provider wiring)
+- components/
+  - WalletConnect.tsx (Lace connect UI)
+- lib/
+  - midnight-client.ts (wallet + proof + ledger client logic)
+  - midnightClient.ts (re-export compatibility layer)
+  - walletContext.tsx (shared wallet state across routes)
+  - witnessProvider.ts (local witness functions + record helpers)
+  - zk/proof.ts (local zk helper utilities)
+- pkgs/contract/src/
+  - patient_registry.compact (Compact contract source)
+- managed/contracts/
+  - patient_registry.managed.json
+  - patient_registry.abi.json
+  - patient_registry.bytecode
+- docker-compose.yml (Midnight proof server service)
+- compile.sh (contract compile entry point)
 
-### 1. Install dependencies
+## Contract details
 
-```bash
-npm install
-```
+Contract source:
 
-### 2. Prepare environment
+- pkgs/contract/src/patient_registry.compact
 
-Create a local env file from the template:
+Language and imports:
 
-```bash
-cp .env.local.example .env.local
-```
+- pragma language_version 0.30.0
+- import CompactStandardLibrary
 
-Default local network in template is set to:
+### Public ledger fields
 
-```bash
-NEXT_PUBLIC_MIDNIGHT_NETWORK=undeployed
-```
+The contract currently exports these on-chain fields:
 
-When you move to preprod, change it to `preprod`.
+- is_eligible: Boolean
+- verified_at: Field
+- issuer_key_hash: Opaque string
+- nullifier: Opaque string
+- nullifier_used: Boolean
 
-### 3. Install Compact compiler toolchain
+Meaning:
 
-Make sure `compactc` is available:
+- is_eligible indicates pass/fail
+- verified_at stores verification time
+- issuer_key_hash stores the expected clinic key hash
+- nullifier stores one-use proof nonce
+- nullifier_used enforces replay protection
 
-```bash
-compactc --version
-```
+### Witness functions
 
-### 4. Compile contract artifacts and keys
+The contract declares four witness inputs:
 
-```bash
-npm run compile:contract
-```
+- local_health_record(): Opaque string
+- clinic_signature(): Opaque string
+- current_timestamp(): Field
+- proof_nullifier(): Opaque string
 
-### 5. Start Midnight proof server
+In this project, these are implemented in browser code via:
 
-```bash
-docker-compose up
-```
+- lib/witnessProvider.ts
 
-Health check:
+### Exported circuits
 
-```bash
-curl http://localhost:6300/health
-```
+1. prove_vaccination_eligibility(required_vaccine, clinic_pubkey_hash)
 
-### 6. Run the frontend
+Current behavior:
 
-```bash
-npm run dev
-```
+- reads witness record/signature/timestamp/nullifier
+- checks replay guard: assert !nullifier_used
+- writes disclosed values to ledger fields
+- sets nullifier_used to true
 
-Open: `http://localhost:3000`
+Important implementation note:
+
+- signature and vaccine checks are currently placeholders in contract code
+- sig_valid and has_vaccine are hardcoded true today
+
+2. revoke_eligibility()
+
+Current behavior:
+
+- sets is_eligible to false
+- updates verified_at
+- clears nullifier_used
+
+## Contract artifact status
+
+Current managed files indicate placeholder state:
+
+- managed/contracts/patient_registry.managed.json -> status: placeholder
+- managed/contracts/patient_registry.abi.json -> status: placeholder
+
+This means real compiled outputs and key material still need to be generated before production/demo-final submission.
+
+## Wallet and network behavior
+
+- Wallet integration uses Midnight dapp connector API in lib/midnight-client.ts
+- Wallet session is shared across pages through lib/walletContext.tsx
+- Stable network ID is taken from NEXT_PUBLIC_MIDNIGHT_NETWORK
+
+If wallet and app network IDs do not match, connection fails.
+
+## Local setup
+
+1. Install dependencies
+
+   npm install
+
+2. Create local environment file
+
+   cp .env.local.example .env.local
+
+3. Verify Compact compiler
+
+   compactc --version
+
+4. Compile contract artifacts
+
+   npm run compile:contract
+
+5. Start proof server
+
+   docker-compose up
+
+6. Check server health
+
+   curl http://localhost:6300/health
+
+7. Start frontend
+
+   npm run dev
+
+Open http://localhost:3000
 
 ## Environment variables
 
-Use `.env.local` with these keys:
+Set in .env.local:
 
-```bash
-NEXT_PUBLIC_MIDNIGHT_NETWORK=undeployed
-NEXT_PUBLIC_MIDNIGHT_NODE_URL=https://rpc.midnight-preprod.example.com
-NEXT_PUBLIC_PROOF_SERVER_URL=http://localhost:6300
-NEXT_PUBLIC_CONTRACT_ADDRESS=
-```
+- NEXT_PUBLIC_MIDNIGHT_NETWORK
+- NEXT_PUBLIC_MIDNIGHT_NODE_URL
+- NEXT_PUBLIC_PROOF_SERVER_URL
+- NEXT_PUBLIC_CONTRACT_ADDRESS
 
-Notes:
+Recommended while local wallet is undeployed:
 
-- `NEXT_PUBLIC_MIDNIGHT_NETWORK` must match the network your Lace wallet is using.
-- Set `NEXT_PUBLIC_CONTRACT_ADDRESS` after deployment.
+- NEXT_PUBLIC_MIDNIGHT_NETWORK=undeployed
 
-## Current status
+When moving to preprod:
 
-Working today:
+- NEXT_PUBLIC_MIDNIGHT_NETWORK=preprod
 
-- Wallet connect UI is integrated.
-- Wallet state is shared globally via React context across pages.
-- `/issue`, `/passport`, `/verify` UI flow is wired.
-- Build passes.
+## Available scripts
 
-Still pending for a full production-grade demo:
+- npm run dev
+- npm run build
+- npm run start
+- npm run lint
+- npm run compile:contract
 
-- Generate real managed artifacts and proving/verifier key material.
-- Deploy contract and set real contract address.
-- Replace placeholder policy logic in Compact contract with full checks.
-- Complete end-to-end real on-chain proof submission and lookup wiring.
+## Hackathon readiness checklist
 
-## Hackathon checklist
-
-- [ ] Compile real artifacts and keys (`npm run compile:contract`)
-- [ ] Deploy contract on target Midnight network
-- [ ] Set `NEXT_PUBLIC_CONTRACT_ADDRESS`
-- [ ] Validate wallet + proof flow on intended network
-- [ ] Test replay prevention (nullifier reuse)
-- [ ] Record and attach 2-minute demo video
-
-## Scripts
-
-```bash
-npm run dev
-npm run build
-npm run start
-npm run lint
-npm run compile:contract
-```
+- [ ] Replace placeholder contract checks with real signature and vaccine validation
+- [ ] Generate real managed artifacts and proving/verifier keys
+- [ ] Deploy contract and set NEXT_PUBLIC_CONTRACT_ADDRESS
+- [ ] Run full issue -> passport -> verify flow on target network
+- [ ] Validate nullifier replay protection behavior
+- [ ] Record short demo video
 
 ## License
 
