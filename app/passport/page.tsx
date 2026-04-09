@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import WalletConnect from "../../components/WalletConnect";
+import { useState, useEffect } from "react";
+import WalletConnect from "@/components/WalletConnect";
 import {
   runProof,
-  type WalletState,
   type LedgerState,
   type ProofUpdate,
-} from "../../lib/midnight-client";
-import { hasRecord } from "../../lib/witnessProvider";
+} from "@/lib/midnightClient";
+import { hasRecord } from "@/lib/witnessProvider";
+import { useWallet } from "@/lib/walletContext";
 
 const PROOF_STAGE_LABELS: Record<string, string> = {
   idle: "Ready",
@@ -20,25 +20,34 @@ const PROOF_STAGE_LABELS: Record<string, string> = {
 };
 
 export default function PassportPage() {
-  const [wallet, setWallet] = useState<WalletState | null>(null);
-  const [recordExists, setRecordExists] = useState(false);
+  const { wallet } = useWallet();
   const [proofUpdate, setProofUpdate] = useState<ProofUpdate | null>(null);
   const [ledgerState, setLedgerState] = useState<LedgerState | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ── HYDRATION FIX ──────────────────────────────────────────────────
+  // hasRecord() reads localStorage which doesn't exist on the server.
+  // Initialize to false (safe server default), then check for real
+  // on the client after mount. This prevents the SSR/client mismatch.
+  const [recordExists, setRecordExists] = useState(false);
   useEffect(() => {
     setRecordExists(hasRecord());
   }, []);
+  // ───────────────────────────────────────────────────────────────────
 
   async function handleProve() {
+    if (!wallet) {
+      setError("Connect Lace wallet first.");
+      return;
+    }
+
     if (!recordExists) {
       setError(
         "No health record found on this device. Visit /issue first to get a credential.",
       );
       return;
     }
-
     setRunning(true);
     setError(null);
     setLedgerState(null);
@@ -63,47 +72,66 @@ export default function PassportPage() {
   const pct = proofUpdate?.pct ?? 0;
 
   return (
-    <section className="panel">
-      <h2>Patient Vault</h2>
-      <p>
-        Generate a privacy-preserving eligibility proof from local witness data.
+    <main style={{ maxWidth: 560, margin: "0 auto", padding: "2.5rem 1rem" }}>
+      <h1 style={{ fontSize: 22, fontWeight: 500, marginBottom: 4 }}>
+        Patient Vault
+      </h1>
+      <p
+        style={{
+          fontSize: 13,
+          opacity: 0.55,
+          marginBottom: 24,
+          fontFamily: "monospace",
+        }}
+      >
+        /passport · generate your eligibility proof
       </p>
 
-      <WalletConnect onConnected={setWallet} />
+      <div style={{ marginBottom: 16 }}>
+        <WalletConnect />
+      </div>
 
-      {wallet && (
-        <p style={{ fontSize: 12, opacity: 0.65, fontFamily: "monospace" }}>
-          {wallet.shieldedAddress.slice(0, 12)}... ({wallet.networkId})
-        </p>
-      )}
-
+      {/* Record status — only rendered client-side after useEffect, no hydration mismatch */}
       <div
         style={{
           padding: "10px 14px",
           borderRadius: 8,
-          marginTop: 8,
-          marginBottom: 12,
+          marginBottom: 16,
           border: `0.5px solid ${recordExists ? "#1D9E75" : "#ccc"}`,
           background: recordExists ? "rgba(29,158,117,0.06)" : "transparent",
           fontSize: 13,
         }}
       >
         {recordExists
-          ? "Health credential found on this device"
-          : "No credential found. Visit /issue first."}
+          ? "✓ Health credential found on this device"
+          : "✗ No credential — visit /issue first"}
       </div>
 
+      {/* Prove button */}
       <button
-        className="primary"
         onClick={handleProve}
-        disabled={running || !recordExists}
-        type="button"
+        disabled={running || !recordExists || !wallet}
+        style={{
+          width: "100%",
+          padding: "12px 16px",
+          borderRadius: 8,
+          background: running ? "rgba(0,0,0,0.05)" : "#0C447C",
+          color: running ? "inherit" : "#fff",
+          border: "0.5px solid rgba(0,0,0,0.1)",
+          fontSize: 14,
+          fontWeight: 500,
+          cursor:
+            running || !recordExists || !wallet ? "not-allowed" : "pointer",
+          opacity: !recordExists || !wallet ? 0.4 : 1,
+          transition: "all .2s",
+        }}
       >
-        {running ? "Generating proof..." : "Prove Vaccination"}
+        {running ? "Generating proof…" : "Prove Vaccination"}
       </button>
 
+      {/* Progress bar */}
       {proofUpdate && proofUpdate.stage !== "idle" && (
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 16 }}>
           <div
             style={{
               display: "flex",
@@ -144,21 +172,85 @@ export default function PassportPage() {
         </div>
       )}
 
-      {error && <p className="error">{error}</p>}
-
-      {ledgerState && (
-        <div className="timeline" style={{ marginTop: 14 }}>
-          <p className="ok">Eligibility verified.</p>
-          <ul>
-            <li>is_eligible: {String(ledgerState.is_eligible)}</li>
-            <li>
-              verified_at:{" "}
-              {new Date(ledgerState.verified_at * 1000).toLocaleString()}
-            </li>
-            <li>nullifier: {ledgerState.nullifier}</li>
-          </ul>
+      {/* Error message */}
+      {error && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: "10px 14px",
+            borderRadius: 6,
+            background: "rgba(162,45,45,0.08)",
+            border: "0.5px solid rgba(162,45,45,0.3)",
+            fontSize: 12,
+            fontFamily: "monospace",
+            whiteSpace: "pre-wrap",
+            color: "#A32D2D",
+            lineHeight: 1.5,
+          }}
+        >
+          {error}
         </div>
       )}
-    </section>
+
+      {/* On-chain result card */}
+      {ledgerState && (
+        <div
+          style={{
+            marginTop: 20,
+            padding: 20,
+            borderRadius: 12,
+            border: "1.5px solid #1D9E75",
+            background: "rgba(29,158,117,0.06)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 500,
+              marginBottom: 12,
+              color: "#0F6E56",
+            }}
+          >
+            ✓ Eligibility Verified On-Chain
+          </div>
+          <table
+            style={{
+              width: "100%",
+              fontSize: 12,
+              fontFamily: "monospace",
+              borderCollapse: "collapse",
+            }}
+          >
+            <tbody>
+              {(
+                [
+                  ["is_eligible", String(ledgerState.is_eligible)],
+                  [
+                    "verified_at",
+                    new Date(ledgerState.verified_at * 1000).toLocaleString(),
+                  ],
+                  [
+                    "issuer_key_hash",
+                    ledgerState.issuer_key_hash.slice(0, 20) + "…",
+                  ],
+                  ["nullifier", ledgerState.nullifier.slice(0, 20) + "…"],
+                ] as [string, string][]
+              ).map(([k, v]) => (
+                <tr key={k}>
+                  <td style={{ padding: "4px 0", opacity: 0.5, width: "40%" }}>
+                    {k}
+                  </td>
+                  <td style={{ padding: "4px 0" }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ marginTop: 12, fontSize: 11, opacity: 0.45 }}>
+            This is the complete public ledger record. Patient identity is not
+            stored here.
+          </div>
+        </div>
+      )}
+    </main>
   );
 }

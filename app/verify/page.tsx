@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { getLedgerState, type LedgerState } from "../../lib/midnight-client";
+import { useWallet } from "../../lib/walletContext";
 
 export default function VerifyPage() {
+  const { wallet } = useWallet();
   const [address, setAddress] = useState(
     process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "",
   );
@@ -36,6 +38,12 @@ export default function VerifyPage() {
       <h2>Verifier Scanner</h2>
       <p>Read only the public ledger result for this proof contract.</p>
 
+      {!wallet && (
+        <p className="error" style={{ fontWeight: 500 }}>
+          Connect Lace wallet first.
+        </p>
+      )}
+
       <label htmlFor="contract-address">Contract address</label>
       <input
         id="contract-address"
@@ -47,7 +55,7 @@ export default function VerifyPage() {
       <button
         className="primary"
         onClick={handleVerify}
-        disabled={loading}
+        disabled={loading || !wallet}
         type="button"
       >
         {loading ? "Querying ledger..." : "Check Eligibility"}

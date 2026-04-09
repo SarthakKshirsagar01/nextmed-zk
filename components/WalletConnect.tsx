@@ -8,16 +8,13 @@
 // ============================================================
 
 import { useState } from "react";
-import { connectWallet, type WalletState } from "../lib/midnight-client";
+import { connectWallet } from "../lib/midnight-client";
+import { useWallet } from "../lib/walletContext";
 
-interface WalletConnectProps {
-  onConnected?: (wallet: WalletState) => void;
-}
-
-export default function WalletConnect({ onConnected }: WalletConnectProps) {
+export default function WalletConnect() {
+  const { wallet, setWallet } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wallet, setWallet] = useState<WalletState | null>(null);
 
   const short = (addr: string) =>
     addr.length > 16 ? `${addr.slice(0, 8)}…${addr.slice(-6)}` : addr;
@@ -28,7 +25,6 @@ export default function WalletConnect({ onConnected }: WalletConnectProps) {
     try {
       const state = await connectWallet();
       setWallet(state);
-      onConnected?.(state);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Connection failed");
     } finally {

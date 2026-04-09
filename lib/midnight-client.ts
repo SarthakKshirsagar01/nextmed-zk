@@ -42,48 +42,10 @@ export interface ProofUpdate {
 
 let connectedApiCache: ConnectedAPI | null = null;
 
-function isNetworkMismatchError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("network id mismatch") ||
-    (lower.includes("network") && lower.includes("mismatch"))
-  );
-}
-
-function isInvalidNetworkIdError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("invalid network id") ||
-    lower.includes("valid networks are:")
-  );
-}
-
-function isUnsupportedNetworkIdError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("unsupported network id") ||
-    lower.includes("supported networks are:")
-  );
-}
-
-function getNetworkCandidates(): string[] {
-  const configured = process.env.NEXT_PUBLIC_MIDNIGHT_NETWORK?.trim();
-  const fallback = [
-    "preprod",
-    "testnet",
-    "preview",
-    "devnet",
-    "qanet",
-    "mainnet",
-    "undeployed",
-  ];
-  return Array.from(
-    new Set(
-      [configured, ...fallback]
-        .filter(Boolean)
-        .map((v) => String(v).trim().toLowerCase()),
-    ),
-  );
+function getConfiguredNetworkId(): string {
+  return (process.env.NEXT_PUBLIC_MIDNIGHT_NETWORK ?? "undeployed")
+    .trim()
+    .toLowerCase();
 }
 
 function resolveWalletApi(): InitialAPI {
@@ -117,50 +79,32 @@ async function getConnectedApi(): Promise<ConnectedAPI> {
   }
 
   const initial = resolveWalletApi();
-  const candidates = getNetworkCandidates();
-  let lastErrorMessage = "";
+  const networkId = getConfiguredNetworkId();
 
-  for (const networkId of candidates) {
-    try {
-      connectedApiCache = await initial.connect(networkId);
-      return connectedApiCache;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err ?? "");
-      const lower = message.toLowerCase();
-      lastErrorMessage = message;
+  try {
+    connectedApiCache = await initial.connect(networkId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err ?? "");
+    const lower = message.toLowerCase();
 
-      if (
-        lower.includes("reject") ||
-        lower.includes("denied") ||
-        lower.includes("decline")
-      ) {
-        throw new Error(
-          "Wallet connection rejected. Approve the wallet popup and try again.",
-        );
-      }
-
-      // Retry with another candidate on explicit network selection errors.
-      if (
-        isNetworkMismatchError(message) ||
-        isInvalidNetworkIdError(message) ||
-        isUnsupportedNetworkIdError(message)
-      ) {
-        continue;
-      }
-
+    if (
+      lower.includes("reject") ||
+      lower.includes("denied") ||
+      lower.includes("decline")
+    ) {
       throw new Error(
-        message
-          ? `Wallet connection failed: ${message}`
-          : "Wallet connection failed. Ensure Lace is unlocked and Midnight is enabled.",
+        "Wallet connection rejected. Approve the wallet popup and try again.",
       );
     }
+
+    throw new Error(
+      message
+        ? `Wallet connection failed: ${message}`
+        : `Wallet connection failed on network \"${networkId}\". Ensure Lace is unlocked and on the same network.`,
+    );
   }
 
-  throw new Error(
-    lastErrorMessage
-      ? `Wallet connection failed across network candidates (${candidates.join(", ")}): ${lastErrorMessage}`
-      : "Wallet connection failed. Check NEXT_PUBLIC_MIDNIGHT_NETWORK and ensure Lace is on the same network.",
-  );
+  return connectedApiCache;
 }
 
 function assertCompiledArtifactReady(): void {
