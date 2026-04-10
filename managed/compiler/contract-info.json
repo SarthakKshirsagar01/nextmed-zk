@@ -1,0 +1,120 @@
+{
+  "compiler-version": "0.30.0",
+  "language-version": "0.22.0",
+  "runtime-version": "0.15.0",
+  "circuits": [
+    {
+      "name": "proveVaccination",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "required_vaccine",
+          "type": {
+            "type-name": "Opaque",
+            "tsType": "string"
+          }
+        },
+        {
+          "name": "max_record_age",
+          "type": {
+            "type-name": "Field"
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "proveInsuranceCoverage",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "required_procedure_code",
+          "type": {
+            "type-name": "Opaque",
+            "tsType": "string"
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "revokeEligibility",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    }
+  ],
+  "witnesses": [
+    {
+      "name": "local_health_record",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Opaque",
+        "tsType": "string"
+      }
+    },
+    {
+      "name": "clinic_signature",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Opaque",
+        "tsType": "string"
+      }
+    },
+    {
+      "name": "claimed_vaccine_id",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Opaque",
+        "tsType": "string"
+      }
+    },
+    {
+      "name": "expected_issuer_hash",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Opaque",
+        "tsType": "string"
+      }
+    },
+    {
+      "name": "current_timestamp",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Field"
+      }
+    },
+    {
+      "name": "proof_nonce",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Opaque",
+        "tsType": "string"
+      }
+    }
+  ],
+  "contracts": [
+  ]
+}

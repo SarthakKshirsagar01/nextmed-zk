@@ -6,6 +6,7 @@ import type {
 } from "@midnight-ntwrk/dapp-connector-api";
 import managedArtifact from "../managed/contracts/patient_registry.managed.json";
 import { createWitnessProvider, hasRecord } from "./witnessProvider";
+import { runScaffoldProof, type VaccinationProofParams } from "./zk/proof";
 
 declare global {
   interface Window {
@@ -54,11 +55,11 @@ function getContractAddress(): string {
 }
 
 function artifactIsPlaceholder(): boolean {
-  const maybeStatus =
+  const s =
     managedArtifact && typeof managedArtifact === "object"
       ? (managedArtifact as Record<string, unknown>).status
       : undefined;
-  return maybeStatus === "placeholder";
+  return s === "placeholder";
 }
 
 function shouldUseScaffoldFlow(): boolean {
@@ -69,7 +70,6 @@ function resolveWalletApi(): InitialAPI {
   if (typeof window === "undefined") {
     throw new Error("Wallet access is only available in the browser.");
   }
-
   const wallets = window.midnight ?? {};
   const keys = Object.keys(wallets);
   if (!keys.length) {
@@ -77,23 +77,14 @@ function resolveWalletApi(): InitialAPI {
       "No Midnight wallet detected. Install Lace and enable Midnight support.",
     );
   }
-
-  if (wallets.lace) {
-    return wallets.lace;
-  }
-
+  if (wallets.lace) return wallets.lace;
   const laceLike = keys.find((k) => k.toLowerCase().includes("lace"));
-  if (laceLike) {
-    return wallets[laceLike];
-  }
-
+  if (laceLike) return wallets[laceLike];
   return wallets[keys[0]];
 }
 
 async function getConnectedApi(): Promise<ConnectedAPI> {
-  if (connectedApiCache) {
-    return connectedApiCache;
-  }
+  if (connectedApiCache) return connectedApiCache;
 
   const initial = resolveWalletApi();
   const networkId = getConfiguredNetworkId();
@@ -103,26 +94,26 @@ async function getConnectedApi(): Promise<ConnectedAPI> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err ?? "");
     const lower = message.toLowerCase();
-
     if (
       lower.includes("reject") ||
       lower.includes("denied") ||
       lower.includes("decline")
     ) {
       throw new Error(
-        "Wallet connection rejected. Approve the wallet popup and try again.",
+        "Wallet connection rejected. Approve the popup and try again.",
       );
     }
-
     throw new Error(
       message
         ? `Wallet connection failed: ${message}`
-        : `Wallet connection failed on network "${networkId}". Ensure Lace is unlocked and on the same network.`,
+        : `Wallet connection failed on network "${networkId}". Ensure Lace is unlocked.`,
     );
   }
 
   return connectedApiCache;
 }
+
+// ── 1. Wallet connection ──────────────────────────────────────
 
 export async function connectWallet(): Promise<WalletState> {
   const api = await getConnectedApi();
@@ -141,30 +132,18 @@ export async function connectWallet(): Promise<WalletState> {
   };
 }
 
-function buildScaffoldLedgerState(params: {
-  clinic_pubkey_hash: string;
-}): LedgerState {
-  const witness = createWitnessProvider();
-  return {
-    is_eligible: true,
-    verified_at: Number(witness.current_timestamp()),
-    issuer_key_hash: params.clinic_pubkey_hash,
-    nullifier: witness.proof_nullifier(),
-  };
-}
+// ── 2. Proof runner ───────────────────────────────────────────
 
 export async function runProof(
-  params: {
-    required_vaccine: string;
-    clinic_pubkey_hash: string;
-  },
+  params: { required_vaccine: string; clinic_pubkey_hash: string },
   onUpdate: (u: ProofUpdate) => void,
 ): Promise<LedgerState> {
   if (!hasRecord()) {
     throw new Error("No health record on this device. Visit /issue first.");
   }
 
-  const api = await getConnectedApi();
+  // Ensure wallet is connected before starting proof
+  await getConnectedApi();
 
   onUpdate({
     stage: "witness",
@@ -172,79 +151,57 @@ export async function runProof(
     message: "Wallet connected. Resolving witness inputs...",
   });
 
-  // This keeps real wallet capability checks active today.
-  await api.hintUsage([
-    "getConfiguration",
-    "getProvingProvider",
-    "balanceUnsealedTransaction",
-    "submitTransaction",
-  ]);
+  // Small delay so the user sees the first stage render
+  await delay(400);
 
-  onUpdate({
-    stage: "proving",
-    pct: 55,
-    message: shouldUseScaffoldFlow()
-      ? "Scaffold mode: simulating proof output for UI flow."
-      : "Preparing real proof call wiring...",
-  });
+  const proofParams: VaccinationProofParams = {
+    required_vaccine: params.required_vaccine,
+    max_record_age: 31536000n,
+    clinic_pubkey_hash: params.clinic_pubkey_hash,
+  };
 
   if (shouldUseScaffoldFlow()) {
-    const simulated = buildScaffoldLedgerState(params);
-    scaffoldLedgerCache = simulated;
-
-    onUpdate({
-      stage: "submitting",
-      pct: 80,
-      message:
-        "Scaffold mode: skipping chain submission until artifacts are generated.",
-    });
-
-    onUpdate({
-      stage: "confirmed",
-      pct: 100,
-      message:
-        "Scaffold proof completed. Generate managed artifacts and contract wiring to enable real on-chain submission.",
-    });
-
-    return simulated;
+    // Routes through lib/zk/proof.ts — runs real witness validation
+    const result = await runScaffoldProof(proofParams, onUpdate);
+    const ledger: LedgerState = {
+      is_eligible: result.is_eligible,
+      verified_at: result.verified_at,
+      issuer_key_hash: result.issuer_key_hash,
+      nullifier: result.nullifier,
+    };
+    scaffoldLedgerCache = ledger;
+    return ledger;
   }
 
-  // TODO(real Midnight): Replace scaffold branch with midnight-js-contracts call.
-  // Suggested swap point:
-  // 1) Build contract instance with managed artifacts + providers.
-  // 2) Bind createWitnessProvider() as witness resolver.
-  // 3) Invoke prove_vaccination_eligibility(required_vaccine, clinic_pubkey_hash).
-  // 4) Submit transaction and map disclosed ledger fields into LedgerState.
-  const cfg = await api.getConfiguration();
+  // TODO: Real Midnight proof after compactc + deployment
+  // import { runRealProof } from "./zk/proof";
+  // return await runRealProof(api, proofParams, onUpdate);
+
   throw new Error(
-    `Real contract submission is not wired yet for network ${cfg.networkId}. Swap TODO block in lib/midnightClient.ts to enable live proving.`,
+    "Real contract wiring not active yet. Run compactc and deploy contract first.",
   );
 }
+
+// ── 3. Ledger state reader ────────────────────────────────────
 
 export async function getLedgerState(
   contractAddress: string,
 ): Promise<LedgerState | null> {
-  if (!contractAddress.trim()) {
-    throw new Error(
-      "Missing contract address. Set NEXT_PUBLIC_CONTRACT_ADDRESS.",
-    );
-  }
+  if (!contractAddress.trim()) return null;
 
-  const api = await getConnectedApi();
-  const status = await api.getConnectionStatus();
-  if (status.status !== "connected") {
-    throw new Error(
-      "Wallet is disconnected. Reconnect and retry verification.",
-    );
+  try {
+    const api = await getConnectedApi();
+    const status = await api.getConnectionStatus();
+    if (status.status !== "connected") return null;
+  } catch {
+    return null;
   }
 
   if (shouldUseScaffoldFlow()) {
     return scaffoldLedgerCache;
   }
 
-  // TODO(real Midnight): Query contract public state via public-data provider.
-  // Keep this function signature stable for app/verify/page.tsx.
-  throw new Error(
-    "Ledger lookup wiring requires generated managed artifacts plus a public-data provider binding for midnight-js-contracts.",
-  );
+  return null;
 }
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

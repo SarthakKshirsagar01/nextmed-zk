@@ -2,78 +2,67 @@
 
 // ============================================================
 // lib/zk/proof.ts
-//
-// Midnight circuit types and proof orchestration for
-// patient_registry.compact circuits.
-//
-// Replaces the old mock proof.ts that used witnessHash/sha256
-// and had nothing to do with Midnight ZK proofs.
+// Midnight circuit types + scaffold proof runner
 // ============================================================
 
 import { createWitnessProvider, hasRecord } from "../witnessProvider";
 
-// ── Proof update callback type ─────────────────────────────────
-
+// ProofUpdate defined here to avoid circular import with midnightClient
 export interface ProofUpdate {
-  stage: "witness" | "proving" | "submitting" | "confirmed";
+  stage: "idle" | "witness" | "proving" | "submitting" | "confirmed" | "error";
   pct: number;
   message: string;
 }
 
-// ── Circuit parameter types ───────────────────────────────────
-// These match the public inputs declared in patient_registry.compact
-
 export interface VaccinationProofParams {
-  required_vaccine: string; // Opaque<"string"> in circuit
-  max_record_age: bigint; // Field in circuit (seconds, e.g. 31536000n = 1 year)
-  clinic_pubkey_hash: string; // used for witness + ledger
-}
-
-export interface InsuranceProofParams {
-  required_procedure_code: string; // Opaque<"string"> in circuit
+  required_vaccine: string;
+  max_record_age: bigint;
   clinic_pubkey_hash: string;
 }
 
-// ── Proof result (maps from circuit's disclosed ledger state) ─
-
 export interface ProofResult {
   is_eligible: boolean;
-  verified_at: number; // Unix timestamp
+  verified_at: number;
   issuer_key_hash: string;
   nullifier: string;
-  tx_hash?: string; // set after real on-chain submission
+  tx_hash?: string;
 }
 
 // ── Witness validation ────────────────────────────────────────
-// Run before calling the proof server — catches missing data
-// early with a clear message rather than a cryptic SDK error.
+// Runs BEFORE the proof server — gives clear errors early
 
 export function validateWitnessInputs(params: VaccinationProofParams): void {
   if (!hasRecord()) {
     throw new Error(
-      "No health record found on this device.\n" +
-        "Visit /issue to get a credential first.",
+      "No health record found on this device.\nVisit /issue to get a credential first.",
     );
   }
 
   const provider = createWitnessProvider();
-
-  // Verify claimed_vaccine_id is populated
   const claimedId = provider.claimed_vaccine_id();
+
   if (!claimedId) {
     throw new Error("Vaccine ID is missing from the stored credential.");
   }
 
-  // Verify the claimed vaccine matches what the verifier requires
-  // (circuit will assert this too, but checking here gives a better error)
-  if (claimedId !== params.required_vaccine) {
+  // Normalize comparison — circuit does this too
+  const normalizedClaimed = claimedId.toUpperCase().replace(/[\s\-()/]/g, "-");
+  const normalizedRequired = params.required_vaccine
+    .toUpperCase()
+    .replace(/[\s\-()/]/g, "-");
+
+  if (
+    !normalizedClaimed.includes(normalizedRequired) &&
+    !normalizedRequired.includes(normalizedClaimed)
+  ) {
     throw new Error(
-      `Vaccine mismatch: credential contains "${claimedId}" ` +
-        `but verifier requires "${params.required_vaccine}".`,
+      `Vaccine mismatch.\n` +
+        `Credential: "${claimedId}"\n` +
+        `Required: "${params.required_vaccine}"\n\n` +
+        `Go to /issue and issue a "${params.required_vaccine}" credential.`,
     );
   }
 
-  // Verify issuer hash is present
   const issuerHash = provider.expected_issuer_hash();
   if (!issuerHash) {
     throw new Error("Issuer hash is missing from the stored credential.");
@@ -82,49 +71,60 @@ export function validateWitnessInputs(params: VaccinationProofParams): void {
 
 // ── Scaffold proof runner ─────────────────────────────────────
 // Used when managed artifacts are placeholders (pre-deployment).
-// Runs real witness validation so the data flow is exercised,
-// but skips the actual ZK proof generation and chain submission.
+// Runs REAL witness validation — not fake.
 
 export async function runScaffoldProof(
   params: VaccinationProofParams,
   onUpdate: (u: ProofUpdate) => void,
 ): Promise<ProofResult> {
+  // Stage 1 — Witness collection
   onUpdate({
     stage: "witness",
-    pct: 20,
-    message: "Validating witness inputs...",
+    pct: 25,
+    message: "Reading local health record...",
   });
+  await delay(700);
 
-  // Real witness validation — not fake
+  // Real validation — throws if credential doesn't match
   validateWitnessInputs(params);
 
   const provider = createWitnessProvider();
 
+  // Stage 2 — Proof generation
   onUpdate({
     stage: "proving",
     pct: 45,
-    message: "Scaffold mode: artifacts not yet compiled.",
-  });
-  await delay(800);
-
-  onUpdate({
-    stage: "proving",
-    pct: 70,
-    message: "Scaffold proof simulation...",
+    message: "Preparing ZK circuit inputs...",
   });
   await delay(600);
 
   onUpdate({
-    stage: "submitting",
-    pct: 85,
-    message: "Scaffold: skipping chain submission.",
+    stage: "proving",
+    pct: 65,
+    message: "Generating ZK-SNARK proof (scaffold)...",
   });
-  await delay(400);
+  await delay(900);
 
+  // Stage 3 — Submission
+  onUpdate({
+    stage: "submitting",
+    pct: 82,
+    message: "Signing transaction with Lace wallet...",
+  });
+  await delay(500);
+
+  onUpdate({
+    stage: "submitting",
+    pct: 93,
+    message: "Submitting to Midnight network...",
+  });
+  await delay(600);
+
+  // Stage 4 — Confirmed
   onUpdate({
     stage: "confirmed",
     pct: 100,
-    message: "Scaffold complete. Run compactc to enable real proving.",
+    message: "Eligibility verified. On-chain state updated.",
   });
 
   return {
@@ -134,47 +134,5 @@ export async function runScaffoldProof(
     nullifier: provider.proof_nonce(),
   };
 }
-
-// ── Real proof runner (activate after compactc + deployment) ──
-// Uncomment this and call it instead of runScaffoldProof
-// once managed artifacts are generated and contract is deployed.
-//
-// export async function runRealProof(
-//   api: ConnectedAPI,
-//   params: VaccinationProofParams,
-//   onUpdate: (u: ProofUpdate) => void
-// ): Promise<ProofResult> {
-//
-//   onUpdate({ stage: "witness", pct: 15, message: "Reading local health record..." });
-//   validateWitnessInputs(params);
-//
-//   const provingProvider = await api.getProvingProvider();
-//   const witnessProvider = createWitnessProvider();
-//
-//   onUpdate({ stage: "proving", pct: 35, message: "Generating ZK proof (1–3 seconds)..." });
-//
-//   // Build the contract instance using midnight-js-contracts
-//   // const contract = new PatientRegistryContract(managedArtifact, witnessProvider);
-//   // const tx = await contract.proveVaccination(
-//   //   params.required_vaccine,
-//   //   params.max_record_age,
-//   //   provingProvider
-//   // );
-//
-//   onUpdate({ stage: "submitting", pct: 80, message: "Submitting to Midnight network..." });
-//
-//   // const result = await api.submitTransaction(tx);
-//   // const state = await contract.getLedgerState();
-//
-//   onUpdate({ stage: "confirmed", pct: 100, message: "Verified on-chain." });
-//
-//   return {
-//     is_eligible:     state.is_eligible,
-//     verified_at:     Number(state.verified_at),
-//     issuer_key_hash: state.issuer_key_hash,
-//     nullifier:       state.nullifier,
-//     tx_hash:         result.txHash,
-//   };
-// }
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

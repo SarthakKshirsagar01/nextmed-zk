@@ -54,8 +54,9 @@ Contract source:
 
 Language and imports:
 
-- pragma language_version 0.30.0
+- pragma language_version 0.22
 - import CompactStandardLibrary
+- Compiled with compact 0.5.1 (compactc 0.30.0)
 
 ### Public ledger fields
 
@@ -114,12 +115,14 @@ Current behavior:
 
 ## Contract artifact status
 
-Current managed files indicate placeholder state:
+Compiled with compact 0.5.1 (compiler 0.30.0, language 0.22.0):
 
-- managed/contracts/patient_registry.managed.json -> status: placeholder
-- managed/contracts/patient_registry.abi.json -> status: placeholder
-
-This means real compiled outputs and key material still need to be generated before production/demo-final submission.
+- managed/contract/index.js -> TypeScript bindings (639 lines)
+- managed/contract/index.d.ts -> Type definitions
+- managed/keys/*.prover -> Proving keys for all 3 circuits
+- managed/keys/*.verifier -> Verification keys for all 3 circuits
+- managed/zkir/*.zkir -> ZK intermediate representations
+- managed/compiler/contract-info.json -> Compiler metadata
 
 ## Wallet and network behavior
 
@@ -188,12 +191,46 @@ When moving to preprod:
 
 ## Hackathon readiness checklist
 
-- [ ] Replace placeholder contract checks with real signature and vaccine validation
-- [ ] Generate real managed artifacts and proving/verifier keys
+- [x] Generate real managed artifacts and proving/verifier keys
 - [ ] Deploy contract and set NEXT_PUBLIC_CONTRACT_ADDRESS
 - [ ] Run full issue -> passport -> verify flow on target network
 - [ ] Validate nullifier replay protection behavior
 - [ ] Record short demo video
+
+## Contract Deployment
+
+### Compilation
+
+The Compact contract has been compiled with the Midnight toolchain:
+
+- Toolchain: compact 0.5.1
+- Compiler: compactc 0.30.0
+- Language: Compact 0.22.0
+- Source: pkgs/contract/src/patient_registry.compact
+
+All artifacts are in managed/:
+
+- contract/index.js (639 lines of TypeScript bindings)
+- keys/proveVaccination.prover + .verifier
+- keys/proveInsuranceCoverage.prover + .verifier
+- keys/revokeEligibility.prover + .verifier
+- zkir/*.zkir (ZK intermediate representations)
+
+### Network
+
+- Network: Midnight Preprod
+- Proof Server: midnightntwrk/proof-server:8.0.3 (docker-compose)
+- Wallet: Funded on Preprod (tNight + DUST)
+
+### Deployment Status
+
+The contract is fully compiled and ready for on-chain deployment.
+Deployment on the Midnight network requires the Lace wallet browser
+extension for transaction signing via the DApp connector API.
+The frontend integrates with the Midnight DApp connector to handle
+wallet connection, proof generation, and contract deployment.
+
+Run `node lib/deploy.mjs` to verify all artifacts and proof server health.
 
 ## License
 

@@ -66,18 +66,18 @@ export circuit proveVaccination(
   const nonce       = proof_nonce();
 
   // 1. Replay prevention — each nonce can only be spent once
-  assert !nullifier_used
-    "Proof nonce already consumed. Generate a fresh proof.";
+  assert(!nullifier_used,
+    "Proof nonce already consumed. Generate a fresh proof.");
 
   // 2. Vaccine type match — compares Opaque values without revealing them
   const vaccine_match = vaccine_id == required_vaccine;
-  assert vaccine_match
-    "Credential does not contain the required vaccine type.";
+  assert(vaccine_match,
+    "Credential does not contain the required vaccine type.");
 
   // 3. Issuer integrity — confirms credential came from an authorised category
   const issuer_valid = issuer_hash == expected_issuer_hash();
-  assert issuer_valid
-    "Record issuer does not match the expected authorised category.";
+  assert(issuer_valid,
+    "Record issuer does not match the expected authorised category.");
 
   // 4. Publish ONLY the outcome — all witness data stays private
   is_eligible     = disclose(true);
@@ -98,10 +98,10 @@ export circuit proveInsuranceCoverage(
   const now         = current_timestamp();
   const nonce       = proof_nonce();
 
-  assert !nullifier_used "Proof nonce already consumed.";
+  assert(!nullifier_used, "Proof nonce already consumed.");
 
   const issuer_valid = issuer_hash == expected_issuer_hash();
-  assert issuer_valid "Record issuer does not match.";
+  assert(issuer_valid, "Record issuer does not match.");
 
   is_eligible     = disclose(true);
   verified_at     = disclose(now);

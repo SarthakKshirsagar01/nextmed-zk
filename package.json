@@ -14,6 +14,7 @@
     "@midnight-ntwrk/midnight-js-contracts": "^4.0.4",
     "@midnight-ntwrk/midnight-js-types": "^4.0.4",
     "@midnight-ntwrk/midnight-js-utils": "^4.0.4",
+    "@midnight-ntwrk/wallet-sdk-address-format": "^3.1.0",
     "assert": "^2.1.0",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
