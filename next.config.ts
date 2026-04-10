@@ -5,8 +5,9 @@ const nextConfig: NextConfig = {
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Midnight SDK packages may import Node built-ins in browser bundles.
+      config.resolve = config.resolve ?? {};
       config.resolve.fallback = {
-        ...config.resolve.fallback,
+        ...(config.resolve.fallback ?? {}),
         assert: require.resolve("assert"),
         buffer: require.resolve("buffer"),
         crypto: require.resolve("crypto-browserify"),
@@ -19,7 +20,9 @@ const nextConfig: NextConfig = {
       };
 
       config.plugins = config.plugins || [];
-      const webpack = require("webpack");
+      const webpack = require("webpack") as {
+        ProvidePlugin: new (definitions: Record<string, unknown>) => unknown;
+      };
       config.plugins.push(
         new webpack.ProvidePlugin({
           Buffer: ["buffer", "Buffer"],

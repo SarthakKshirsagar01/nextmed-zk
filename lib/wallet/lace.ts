@@ -40,33 +40,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-async function waitForEnabled(
-  api: LaceApi,
-  retries = 20,
-  intervalMs = 500,
-): Promise<boolean> {
-  if (!api.isEnabled) {
-    return false;
-  }
-
-  for (let i = 0; i <= retries; i += 1) {
-    try {
-      const enabled = await withTimeout(api.isEnabled(), 1500);
-      if (enabled) {
-        return true;
-      }
-    } catch {
-      // Keep polling while extension settles.
-    }
-
-    if (i < retries) {
-      await sleep(intervalMs);
-    }
-  }
-
-  return false;
-}
-
 export async function detectLace(
   retries = 8,
   intervalMs = 250,

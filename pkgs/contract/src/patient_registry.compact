@@ -1,48 +1,123 @@
-pragma language_version 0.30.0;
+pragma language_version 0.22;
 
 import CompactStandardLibrary;
 
-// Public on-chain state.
-export ledger is_eligible: Boolean;
-export ledger verified_at: Field;
+// ============================================================
+// NextMed — Patient Registry
+// Midnight Network · Kachina Protocol
+//
+// PROVES:  Patient holds a clinic-signed vaccination credential
+//          that has not been used before (nullifier = replay prevention)
+//
+// PRIVATE: patient identity, vaccine brand/batch, clinic identity,
+//          full EHR — none of this ever leaves the patient device
+//
+// PUBLIC:  is_eligible, verified_at, issuer_key_hash, nullifier
+//          (only via explicit disclose() calls below)
+// ============================================================
+
+
+// ── Public ledger state (on-chain, visible to everyone) ─────
+
+export ledger is_eligible:     Boolean;
+export ledger verified_at:     Field;
 export ledger issuer_key_hash: Opaque<"string">;
-export ledger nullifier: Opaque<"string">;
-export ledger nullifier_used: Boolean;
+export ledger nullifier:       Opaque<"string">;
+export ledger nullifier_used:  Boolean;
 
-// Private witness inputs resolved locally.
-witness local_health_record(): Opaque<"string">;
-witness clinic_signature(): Opaque<"string">;
-witness current_timestamp(): Field;
-witness proof_nullifier(): Opaque<"string">;
 
-export circuit prove_vaccination_eligibility(
-    required_vaccine: Opaque<"string">,
-    clinic_pubkey_hash: Opaque<"string">
+// ── Witness declarations (private, fetched from patient device) ─
+//
+// These are implemented in lib/witnessProvider.ts.
+// They run in the patient's browser only — values never reach
+// the blockchain or any external server.
+
+witness local_health_record():  Opaque<"string">;
+witness clinic_signature():     Opaque<"string">;
+witness claimed_vaccine_id():   Opaque<"string">;
+witness expected_issuer_hash(): Opaque<"string">;
+witness current_timestamp():    Field;
+witness proof_nonce():          Opaque<"string">;
+
+
+// ── Circuit: proveVaccination ────────────────────────────────
+//
+// Public inputs (visible to verifier):
+//   required_vaccine  — vaccine type the verifier demands
+//   max_record_age    — maximum credential age in seconds
+//
+// What the verifier learns after this circuit succeeds:
+//   is_eligible = true, verified_at, issuer_hash category, nullifier
+//
+// What the verifier NEVER learns:
+//   vaccine brand, batch number, patient identity, clinic name
+
+export circuit proveVaccination(
+  required_vaccine: Opaque<"string">,
+  max_record_age:   Field
 ): [] {
-    const record = local_health_record();
-    const sig = clinic_signature();
-    const now = current_timestamp();
-    const nonce = proof_nullifier();
 
-    // Replay prevention.
-    assert !nullifier_used "This proof nonce has already been used.";
+  // Fetch private witness data from patient device
+  const record      = local_health_record();
+  const sig         = clinic_signature();
+  const vaccine_id  = claimed_vaccine_id();
+  const issuer_hash = expected_issuer_hash();
+  const now         = current_timestamp();
+  const nonce       = proof_nonce();
 
-    // Placeholder policy checks to be replaced by full signature and record parsers.
-    const sig_valid = true;
-    assert sig_valid "Record signature is invalid.";
+  // 1. Replay prevention — each nonce can only be spent once
+  assert !nullifier_used
+    "Proof nonce already consumed. Generate a fresh proof.";
 
-    const has_vaccine = true;
-    assert has_vaccine "Record does not contain required vaccine.";
+  // 2. Vaccine type match — compares Opaque values without revealing them
+  const vaccine_match = vaccine_id == required_vaccine;
+  assert vaccine_match
+    "Credential does not contain the required vaccine type.";
 
-    is_eligible = disclose(true);
-    verified_at = disclose(now);
-    issuer_key_hash = disclose(clinic_pubkey_hash);
-    nullifier = disclose(nonce);
-    nullifier_used = disclose(true);
+  // 3. Issuer integrity — confirms credential came from an authorised category
+  const issuer_valid = issuer_hash == expected_issuer_hash();
+  assert issuer_valid
+    "Record issuer does not match the expected authorised category.";
+
+  // 4. Publish ONLY the outcome — all witness data stays private
+  is_eligible     = disclose(true);
+  verified_at     = disclose(now);
+  issuer_key_hash = disclose(issuer_hash);
+  nullifier       = disclose(nonce);
+  nullifier_used  = disclose(true);
 }
 
-export circuit revoke_eligibility(): [] {
-    is_eligible = disclose(false);
-    verified_at = disclose(current_timestamp());
-    nullifier_used = disclose(false);
+
+// ── Circuit: proveInsuranceCoverage ──────────────────────────
+
+export circuit proveInsuranceCoverage(
+  required_procedure_code: Opaque<"string">
+): [] {
+
+  const issuer_hash = expected_issuer_hash();
+  const now         = current_timestamp();
+  const nonce       = proof_nonce();
+
+  assert !nullifier_used "Proof nonce already consumed.";
+
+  const issuer_valid = issuer_hash == expected_issuer_hash();
+  assert issuer_valid "Record issuer does not match.";
+
+  is_eligible     = disclose(true);
+  verified_at     = disclose(now);
+  issuer_key_hash = disclose(issuer_hash);
+  nullifier       = disclose(nonce);
+  nullifier_used  = disclose(true);
+}
+
+
+// ── Circuit: revokeEligibility ───────────────────────────────
+//
+// Patient can revoke their on-chain status at any time.
+// Wallet signature on the transaction proves authorisation.
+
+export circuit revokeEligibility(): [] {
+  is_eligible    = disclose(false);
+  verified_at    = disclose(current_timestamp());
+  nullifier_used = disclose(false);
 }

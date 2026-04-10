@@ -29,19 +29,48 @@ export interface SignedHealthRecord {
   clinic_pubkey_hash: string;
 }
 
+export interface ContractWitnessProvider {
+  local_health_record: () => string;
+  clinic_signature: () => string;
+  claimed_vaccine_id: () => string;
+  expected_issuer_hash: () => string;
+  current_timestamp: () => bigint;
+  proof_nonce: () => string;
+  proof_nullifier: () => string;
+}
+
+function hasBrowserStorage(): boolean {
+  return (
+    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+  );
+}
+
+function isSignedHealthRecord(value: unknown): value is SignedHealthRecord {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<SignedHealthRecord>;
+  return (
+    typeof candidate.clinic_signature === "string" &&
+    typeof candidate.clinic_pubkey_hash === "string" &&
+    !!candidate.record &&
+    typeof candidate.record === "object"
+  );
+}
+
 // ---- Storage helpers ----------------------------------------
 
 export function storeRecord(signed: SignedHealthRecord): void {
-  if (typeof window === "undefined") return;
+  if (!hasBrowserStorage()) return;
   localStorage.setItem(RECORD_KEY, JSON.stringify(signed));
 }
 
 export function getRecord(): SignedHealthRecord | null {
-  if (typeof window === "undefined") return null;
+  if (!hasBrowserStorage()) return null;
   const raw = localStorage.getItem(RECORD_KEY);
   if (!raw) return null;
+
   try {
-    return JSON.parse(raw) as SignedHealthRecord;
+    const parsed: unknown = JSON.parse(raw);
+    return isSignedHealthRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -52,7 +81,7 @@ export function hasRecord(): boolean {
 }
 
 export function clearRecord(): void {
-  if (typeof window === "undefined") return;
+  if (!hasBrowserStorage()) return;
   localStorage.removeItem(RECORD_KEY);
   localStorage.removeItem(PREFS_KEY);
 }
@@ -88,7 +117,7 @@ export function createDemoRecord(vaccineName: string): SignedHealthRecord {
 // ---- Witness provider ---------------------------------------
 // Returned object matches the 4 witness declarations in patient_registry.compact
 
-export function createWitnessProvider() {
+export function createWitnessProvider(): ContractWitnessProvider {
   return {
     // witness local_health_record(): Opaque<"string">
     local_health_record: (): string => {
@@ -107,14 +136,52 @@ export function createWitnessProvider() {
       return rec.clinic_signature;
     },
 
+    // witness claimed_vaccine_id(): Opaque<"string">
+    claimed_vaccine_id: (): string => {
+      const rec = getRecord();
+      const firstVaccine = rec?.record?.vaccinations?.[0];
+      if (!firstVaccine?.vaccine_id) {
+        throw new Error("No vaccination record found.");
+      }
+      return firstVaccine.vaccine_id;
+    },
+
+    // witness expected_issuer_hash(): Opaque<"string">
+    expected_issuer_hash: (): string => {
+      const rec = getRecord();
+      if (!rec?.clinic_pubkey_hash) {
+        throw new Error("Issuer hash is missing from the stored credential.");
+      }
+      return rec.clinic_pubkey_hash;
+    },
+
     // witness current_timestamp(): Field
     current_timestamp: (): bigint => {
       return BigInt(Math.floor(Date.now() / 1000));
     },
 
-    // witness proof_nullifier(): Opaque<"string">
+    // witness proof_nonce(): Opaque<"string">
+    proof_nonce: (): string => {
+      if (
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+      ) {
+        return crypto.randomUUID();
+      }
+
+      return `fallback-nullifier-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    },
+
+    // Backward-compatible alias used by existing scaffold client code.
     proof_nullifier: (): string => {
-      return crypto.randomUUID();
+      if (
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+      ) {
+        return crypto.randomUUID();
+      }
+
+      return `fallback-nullifier-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     },
   };
 }
