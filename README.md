@@ -148,26 +148,60 @@ npm run dev
 
 ## Project Structure
 
-```
+````
+## 📁 Project Structure
+
+```id="4b8p2r"
 nextmed-zk/
-├── pkgs/contract/src/
-│   └── patient_registry.compact    ← Midnight ZK contract (Compact language)
-├── managed/
-│   └── contracts/                  ← Compiled proving/verification keys
-├── lib/
-│   ├── witnessProvider.ts          ← 6 witness functions (browser-only)
-│   ├── midnightClient.ts           ← Lace wallet + proof orchestration
-│   ├── walletContext.tsx           ← Global wallet state (no reconnect)
-│   └── zk/proof.ts                 ← Circuit types + scaffold runner
-├── components/
-│   └── WalletConnect.tsx           ← Lace connection UI
 ├── app/
-│   ├── page.tsx                    ← Landing
-│   ├── issue/page.tsx              ← Issuer dashboard
-│   ├── passport/page.tsx           ← Patient vault
-│   └── verify/page.tsx             ← Verifier scanner
-└── docker-compose.yml              ← midnightntwrk/proof-server:8.0.3
-```
+│   ├── page.tsx                    ← Landing page
+│   ├── layout.tsx                  ← Root layout
+│   ├── globals.css                 ← Global styles
+│   ├── issue/
+│   │   └── page.tsx                ← Issuer dashboard
+│   ├── passport/
+│   │   └── page.tsx                ← Patient vault
+│   └── verify/
+│       └── page.tsx                ← Verifier scanner
+│
+├── components/
+│   └── WalletConnect.tsx           ← Wallet connection UI
+│
+├── lib/
+│   ├── witnessProvider.ts          ← Witness functions
+│   ├── midnightClient.ts           ← Wallet + proof logic
+│   ├── walletContext.tsx           ← Global wallet state
+│   └── zk/
+│       └── proof.ts                ← ZK proof logic
+│
+├── contracts/
+│   └── Patient_registry/           ← Smart contract folder
+│
+├── compiler/
+│   ├── index.cjs
+│   ├── index.d.ts
+│   └── index.js
+│
+├── zk/
+│   ├── Provelnsurance
+│   ├── Provelnsurance...
+│   ├── ProveVaccination
+│   ├── revokeEligibility
+│   └── revokeEligibility...
+│
+├── node_modules/
+├── public/
+│   ├── favicon.svg
+│   ├── next.svg
+│   └── vercel.svg
+│
+├── package.json
+├── package-lock.json
+├── next.config.ts
+├── tsconfig.json
+├── README.md
+└── docker-compose.yml
+````
 
 ---
 
