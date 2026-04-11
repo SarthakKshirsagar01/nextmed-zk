@@ -5,7 +5,7 @@ import type {
   InitialAPI,
 } from "@midnight-ntwrk/dapp-connector-api";
 import managedArtifact from "../managed/contracts/patient_registry.managed.json";
-import { createWitnessProvider, hasRecord } from "./witnessProvider";
+import { hasRecord } from "./witnessProvider";
 import { runScaffoldProof, type VaccinationProofParams } from "./zk/proof";
 
 declare global {
@@ -44,12 +44,6 @@ export interface ProofUpdate {
 let connectedApiCache: ConnectedAPI | null = null;
 let scaffoldLedgerCache: LedgerState | null = null;
 
-function getConfiguredNetworkId(): string {
-  return (process.env.NEXT_PUBLIC_MIDNIGHT_NETWORK ?? "undeployed")
-    .trim()
-    .toLowerCase();
-}
-
 function getContractAddress(): string {
   return (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "").trim();
 }
@@ -74,7 +68,7 @@ function resolveWalletApi(): InitialAPI {
   const keys = Object.keys(wallets);
   if (!keys.length) {
     throw new Error(
-      "No Midnight wallet detected. Install Lace and enable Midnight support.",
+      "No Midnight wallet detected.\n\nInstall Lace from https://www.lace.io and enable Midnight.",
     );
   }
   if (wallets.lace) return wallets.lace;
@@ -83,37 +77,78 @@ function resolveWalletApi(): InitialAPI {
   return wallets[keys[0]];
 }
 
+// ── Core: try a list of network IDs until one works ───────────
+// Lace wallets report different network IDs depending on their
+// configuration state. We try the configured value first, then
+// fall back through known valid IDs so the UI never breaks.
+
+const NETWORK_CANDIDATES = [
+  // Configured value comes first (from .env.local)
+  ...(typeof process !== "undefined"
+    ? [
+        (process.env.NEXT_PUBLIC_MIDNIGHT_NETWORK ?? "undeployed")
+          .trim()
+          .toLowerCase(),
+      ]
+    : []),
+  // Known valid Midnight network IDs — order matters, most common first
+  "undeployed",
+  "preprod",
+  "standalone",
+  "devnet",
+  "testnet",
+];
+
 async function getConnectedApi(): Promise<ConnectedAPI> {
   if (connectedApiCache) return connectedApiCache;
 
   const initial = resolveWalletApi();
-  const networkId = getConfiguredNetworkId();
 
-  try {
-    connectedApiCache = await initial.connect(networkId);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err ?? "");
-    const lower = message.toLowerCase();
-    if (
-      lower.includes("reject") ||
-      lower.includes("denied") ||
-      lower.includes("decline")
-    ) {
-      throw new Error(
-        "Wallet connection rejected. Approve the popup and try again.",
-      );
+  // Deduplicate candidates while preserving order
+  const seen = new Set<string>();
+  const candidates = NETWORK_CANDIDATES.filter((n) => {
+    if (seen.has(n)) return false;
+    seen.add(n);
+    return true;
+  });
+
+  let lastError = "";
+
+  for (const networkId of candidates) {
+    try {
+      connectedApiCache = await initial.connect(networkId);
+      console.log(`[NextMed] Wallet connected on network: ${networkId}`);
+      return connectedApiCache;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? "");
+      const lower = msg.toLowerCase();
+
+      // User explicitly rejected — stop immediately, don't try other networks
+      if (
+        lower.includes("reject") ||
+        lower.includes("denied") ||
+        lower.includes("decline")
+      ) {
+        throw new Error(
+          "Wallet connection rejected. Click the button again and approve the Lace popup.",
+        );
+      }
+
+      // Network mismatch — try next candidate
+      lastError = msg;
+      continue;
     }
-    throw new Error(
-      message
-        ? `Wallet connection failed: ${message}`
-        : `Wallet connection failed on network "${networkId}". Ensure Lace is unlocked.`,
-    );
   }
 
-  return connectedApiCache;
+  // All candidates exhausted
+  throw new Error(
+    `Could not connect wallet on any known network.\n\n` +
+      `Last error: ${lastError}\n\n` +
+      `Fix: Open Lace → Settings → ensure Midnight is enabled and a network is selected.`,
+  );
 }
 
-// ── 1. Wallet connection ──────────────────────────────────────
+// ── 1. Connect wallet ─────────────────────────────────────────
 
 export async function connectWallet(): Promise<WalletState> {
   const api = await getConnectedApi();
@@ -122,7 +157,10 @@ export async function connectWallet(): Promise<WalletState> {
   const status = await api.getConnectionStatus();
 
   if (!shielded.shieldedAddress) {
-    throw new Error("No shielded Midnight address found in connected wallet.");
+    throw new Error(
+      "No shielded Midnight address found.\n" +
+        "Make sure Midnight is set up in Lace (not just Cardano).",
+    );
   }
 
   return {
@@ -132,7 +170,7 @@ export async function connectWallet(): Promise<WalletState> {
   };
 }
 
-// ── 2. Proof runner ───────────────────────────────────────────
+// ── 2. Run proof ──────────────────────────────────────────────
 
 export async function runProof(
   params: { required_vaccine: string; clinic_pubkey_hash: string },
@@ -142,7 +180,6 @@ export async function runProof(
     throw new Error("No health record on this device. Visit /issue first.");
   }
 
-  // Ensure wallet is connected before starting proof
   await getConnectedApi();
 
   onUpdate({
@@ -150,8 +187,6 @@ export async function runProof(
     pct: 20,
     message: "Wallet connected. Resolving witness inputs...",
   });
-
-  // Small delay so the user sees the first stage render
   await delay(400);
 
   const proofParams: VaccinationProofParams = {
@@ -161,7 +196,6 @@ export async function runProof(
   };
 
   if (shouldUseScaffoldFlow()) {
-    // Routes through lib/zk/proof.ts — runs real witness validation
     const result = await runScaffoldProof(proofParams, onUpdate);
     const ledger: LedgerState = {
       is_eligible: result.is_eligible,
@@ -173,22 +207,18 @@ export async function runProof(
     return ledger;
   }
 
-  // TODO: Real Midnight proof after compactc + deployment
-  // import { runRealProof } from "./zk/proof";
-  // return await runRealProof(api, proofParams, onUpdate);
-
+  // TODO: Real proof after compactc + deployment
   throw new Error(
-    "Real contract wiring not active yet. Run compactc and deploy contract first.",
+    "Real contract wiring not active. Run compactc and deploy first.",
   );
 }
 
-// ── 3. Ledger state reader ────────────────────────────────────
+// ── 3. Get ledger state ───────────────────────────────────────
 
 export async function getLedgerState(
   contractAddress: string,
 ): Promise<LedgerState | null> {
   if (!contractAddress.trim()) return null;
-
   try {
     const api = await getConnectedApi();
     const status = await api.getConnectionStatus();
@@ -197,11 +227,13 @@ export async function getLedgerState(
     return null;
   }
 
-  if (shouldUseScaffoldFlow()) {
-    return scaffoldLedgerCache;
-  }
-
+  if (shouldUseScaffoldFlow()) return scaffoldLedgerCache;
   return null;
+}
+
+// ── Also export resetConnection for debugging ─────────────────
+export function resetWalletConnection(): void {
+  connectedApiCache = null;
 }
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
