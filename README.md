@@ -174,11 +174,11 @@ nextmed-zk/
 ## Contract Deployment
 
 - **Network:** Midnight Preprod
-- **Contract:** `patient_registry` — 3 circuits, 6 witness declarations
-- **Status:** Contract architecture complete. Deployment pending `compactc` toolchain availability on Windows.
-- **Wallet (Preprod):**
-  - Shielded: `mn_shield-addr_preprod1waqflkttwahpzl6wc84pcksmxgm78x46ure6zrefw57c4pfh78vch5vwrzeywt8avf77clf49dl8k73q8xn75m403hxm7t5ejgqe0sqr68t8m`
-  - Unshielded: `mn_addr_preprod1utet23zywk7uzt2f9crmpqpr3wdmevnr5qwhlhems0m5w96nzj2qsgwu9m`
+- **Status:** Contract architecture complete. Deployment requires compactc toolchain.
+- **Funded wallet (Preprod):**  
+  `mn_addr_preprod1utet23zywk7uzt2f9crmpqpr3wdmevnr5qwhlhems0m5w96nzj2qsgwu9m`
+- **Contract source:** `pkgs/contract/src/patient_registry.compact`
+- **Circuits:** proveVaccination, proveInsuranceCoverage, revokeEligibility
 
 ---
 
