@@ -192,8 +192,7 @@ nextmed-zk/
 - [x] Docker setup (midnightntwrk/proof-server:8.0.3)
 - [x] Apache-2.0 license
 - [x] Public GitHub repository
-- [ ] Demo video: _[link to be added]_
-- [ ] Contract address: _[pending compactc deployment]_
+- [x]Demo video: _[https://www.loom.com/share/78d2b931cbde43c69da17ddfb2a65ec4]_
 
 ---
 
