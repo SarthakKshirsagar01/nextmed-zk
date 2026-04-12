@@ -1,5 +1,25 @@
 {
   "status": "placeholder",
-  "source": "pkgs/contract/src/patient_registry.compact",
-  "notes": "Replace with real compiler output before submission."
+  "note": "Replace with real output from: compactc pkgs/contract/src/patient_registry.compact ./managed",
+  "contract": "patient_registry",
+  "circuits": [
+    "proveVaccination",
+    "proveInsuranceCoverage",
+    "revokeEligibility"
+  ],
+  "ledger_fields": [
+    "is_eligible",
+    "verified_at",
+    "issuer_key_hash",
+    "nullifier",
+    "nullifier_used"
+  ],
+  "witnesses": [
+    "local_health_record",
+    "clinic_signature",
+    "claimed_vaccine_id",
+    "expected_issuer_hash",
+    "current_timestamp",
+    "proof_nonce"
+  ]
 }

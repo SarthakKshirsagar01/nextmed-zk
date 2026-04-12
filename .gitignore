@@ -27,3 +27,7 @@ out
 managed/*.pk
 managed/*.vk
 .env.local
+
+.env.local
+deploy-contract.mjs
+services/
